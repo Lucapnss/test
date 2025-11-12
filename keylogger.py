@@ -35,6 +35,38 @@ from email import encoders
 # ============================
 # ASCII Banner & Helper Functions
 # ============================
+class Logger:
+    """Simple logger using Python's logging module."""
+
+    def __init__(self, log_file: str = None, level: int = logging.INFO) -> None:
+        # Ensure output directory exists
+        output_dir = "output"
+        os.makedirs(output_dir, exist_ok=True)
+
+        if log_file is None:
+            log_file = os.path.join(output_dir, "codelogger.log")
+
+        self.logger = logging.getLogger("CodeLogger")
+        self.logger.setLevel(level)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+        fh = logging.FileHandler(log_file)
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
+
+        sh = logging.StreamHandler()
+        sh.setFormatter(formatter)
+        self.logger.addHandler(sh)
+
+    def info(self, message: str) -> None:
+        self.logger.info(message)
+
+    def error(self, message: str) -> None:
+        self.logger.error(message)
+
+    def debug(self, message: str) -> None:
+        self.logger.debug(message)
+
 def print_banner() -> None:
     banner = r"""
    _____          _      _
@@ -115,37 +147,6 @@ def start_web_server(directory: str, port: int, logger: Logger) -> None:
 # ============================
 # Logger Class
 # ============================
-class Logger:
-    """Simple logger using Python's logging module."""
-
-    def __init__(self, log_file: str = None, level: int = logging.INFO) -> None:
-        # Ensure output directory exists
-        output_dir = "output"
-        os.makedirs(output_dir, exist_ok=True)
-
-        if log_file is None:
-            log_file = os.path.join(output_dir, "codelogger.log")
-
-        self.logger = logging.getLogger("CodeLogger")
-        self.logger.setLevel(level)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-        fh = logging.FileHandler(log_file)
-        fh.setFormatter(formatter)
-        self.logger.addHandler(fh)
-
-        sh = logging.StreamHandler()
-        sh.setFormatter(formatter)
-        self.logger.addHandler(sh)
-
-    def info(self, message: str) -> None:
-        self.logger.info(message)
-
-    def error(self, message: str) -> None:
-        self.logger.error(message)
-
-    def debug(self, message: str) -> None:
-        self.logger.debug(message)
 
 
 # ============================
