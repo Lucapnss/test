@@ -1,0 +1,1 @@
+Add-NetNatStaticMapping -NatName "DefaultNAT" -Protocol TCP -ExternalIPAddress "0.0.0.0" -ExternalPort 4444 -InternalIPAddress <VM_IP> -InternalPort 4444
